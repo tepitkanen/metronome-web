@@ -27,14 +27,16 @@ class FakeController implements MetronomeLike {
   })
   setBpm = vi.fn()
   setBeatsPerBar = vi.fn()
+  configure = vi.fn()
   subscribe(listener: (beat: Beat) => void) {
     this.listeners.add(listener)
     return () => {
       this.listeners.delete(listener)
     }
   }
-  emit(beat: Beat) {
-    for (const l of this.listeners) l(beat)
+  emit(beat: Pick<Beat, 'beatInBar' | 'time'> & Partial<Beat>) {
+    const full: Beat = { level: 'normal', audible: true, bpm: 120, bumped: false, ...beat }
+    for (const l of this.listeners) l(full)
   }
   now() {
     return this.time

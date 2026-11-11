@@ -21,11 +21,8 @@ class MetronomeProcessor extends AudioWorkletProcessor {
     super(options)
     // Initial settings arrive with the node, so the very first block is already correct.
     this.core = new MetronomeCore(sampleRate, options?.processorOptions as Partial<Settings>)
-    this.port.onmessage = (e: MessageEvent<Partial<Settings>>) => {
-      const { bpm, beatsPerBar } = e.data
-      if (typeof bpm === 'number') this.core.bpm = bpm
-      if (typeof beatsPerBar === 'number') this.core.beatsPerBar = beatsPerBar
-    }
+    // Later changes arrive as settings patches; the core ignores fields of the wrong type.
+    this.port.onmessage = (e: MessageEvent<Partial<Settings>>) => this.core.apply(e.data)
   }
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {

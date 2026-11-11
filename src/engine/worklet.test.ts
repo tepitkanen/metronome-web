@@ -62,7 +62,7 @@ describe('worklet processor', () => {
     const p = make({ bpm: 60 }) // one beat per 1000 frames at sampleRate 1000
     p.process([], out(1, 128)) // beat 0 at frame 0
     expect(p.port.postMessage).toHaveBeenCalledTimes(1)
-    expect(p.port.postMessage).toHaveBeenCalledWith([{ beatInBar: 0, time: 0 }])
+    expect(p.port.postMessage).toHaveBeenCalledWith([expect.objectContaining({ beatInBar: 0, time: 0 })])
     p.process([], out(1, 128))
     p.process([], out(1, 128))
     expect(p.port.postMessage).toHaveBeenCalledTimes(1)
@@ -72,7 +72,7 @@ describe('worklet processor', () => {
     vi.stubGlobal('currentTime', 2.5)
     const p = make({ bpm: 60 })
     p.process([], out(1, 128))
-    expect(p.port.postMessage).toHaveBeenCalledWith([{ beatInBar: 0, time: 2.5 }])
+    expect(p.port.postMessage).toHaveBeenCalledWith([expect.objectContaining({ beatInBar: 0, time: 2.5 })])
   })
 
   it('applies bpm and beatsPerBar from processorOptions', () => {
@@ -113,6 +113,22 @@ describe('worklet processor', () => {
     }
     // still 300 BPM (200 frames per beat) and 3 beats per bar
     expect(beats).toEqual([0, 1, 2, 0, 1])
+  })
+
+  it('passes the other settings through processorOptions and messages', () => {
+    // Noise sound: a sine click at the stubbed 1000 Hz sample rate would render as zeros.
+    const p = make({ bpm: 60, sound: 'Hi-hat', accents: ['mute'], gap: { play: 1, mute: 1 } })
+    const outputs = out(1, 1000)
+    const heard = (from: number, to: number) => outputs[0][0].subarray(from, to).some((x) => x !== 0)
+    p.process([], outputs)
+    expect(heard(0, 1000)).toBe(false) // beat 0 muted
+    expect(p.port.postMessage).toHaveBeenLastCalledWith([
+      { beatInBar: 0, time: 0, level: 'mute', audible: true, bpm: 60, bumped: false },
+    ])
+    send(p, { subdivision: 2, volume: 0.5 })
+    p.process([], outputs) // beat 1 at frame 0, its eighth at 500
+    expect(heard(0, 100)).toBe(true)
+    expect(heard(500, 600)).toBe(true)
   })
 
   it('does not crash on empty outputs', () => {

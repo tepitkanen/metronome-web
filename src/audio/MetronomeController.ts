@@ -1,4 +1,4 @@
-import { PROCESSOR_NAME, type Beat, type Settings } from '../engine/core'
+import { DEFAULT_SETTINGS, PROCESSOR_NAME, type Beat, type Settings } from '../engine/core'
 
 /** What the UI needs from the audio side; tests substitute a fake. */
 export interface MetronomeLike {
@@ -8,6 +8,8 @@ export interface MetronomeLike {
   stop(): void
   setBpm(bpm: number): void
   setBeatsPerBar(beatsPerBar: number): void
+  /** Change any other engine settings (subdivision, accents, sound, trainers, ...). */
+  configure(patch: Partial<Settings>): void
   /** AudioContext time of the sound currently reaching the speakers, or null when stopped. */
   now(): number | null
 }
@@ -24,7 +26,7 @@ export class MetronomeController implements MetronomeLike {
   private moduleLoaded: Promise<void> | null = null
   private node: AudioWorkletNode | null = null
   private startToken = 0
-  private settings: Settings = { bpm: 120, beatsPerBar: 4 }
+  private settings: Settings = DEFAULT_SETTINGS
 
   constructor(workletUrl: string) {
     this.workletUrl = workletUrl
@@ -72,13 +74,16 @@ export class MetronomeController implements MetronomeLike {
   }
 
   setBpm(bpm: number): void {
-    this.settings = { ...this.settings, bpm }
-    this.node?.port.postMessage({ bpm })
+    this.configure({ bpm })
   }
 
   setBeatsPerBar(beatsPerBar: number): void {
-    this.settings = { ...this.settings, beatsPerBar }
-    this.node?.port.postMessage({ beatsPerBar })
+    this.configure({ beatsPerBar })
+  }
+
+  configure(patch: Partial<Settings>): void {
+    this.settings = { ...this.settings, ...patch } // remembered for the next Start's node
+    this.node?.port.postMessage(patch)
   }
 
   now(): number | null {

@@ -1,17 +1,35 @@
-import type { MouseEvent } from 'react'
+import type { ReactNode } from 'react'
 import type { MetronomeLike } from './audio/MetronomeController'
 import { BeatDots } from './components/BeatDots'
+import { PercentSlider, Segmented, Switch } from './components/Controls'
 import { IntInput } from './components/IntInput'
-import { MAX_BEATS, MIN_BEATS, useMetronome } from './hooks/useMetronome'
-import { useShortcuts } from './hooks/useShortcuts'
+import { keepFocus } from './components/keepFocus'
+import { MAX_SWING, MIN_SWING } from './engine/core'
+import { SOUND_NAMES } from './engine/sound'
 import { MAX_BPM, MIN_BPM } from './engine/tempo'
-
-// Clicking a button shouldn't move focus to it, or Space would then both press the
-// focused button and trigger the Space shortcut. Keyboard (Tab) focus still works.
-const keepFocus = (e: MouseEvent) => e.preventDefault()
+import { MAX_BEATS, MIN_BEATS, useMetronome } from './hooks/useMetronome'
+import { TEMPO_SLIDER_ATTR, useShortcuts } from './hooks/useShortcuts'
 
 const button =
   'w-28 rounded-lg px-4 py-2 font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
+
+const SUBDIVISION_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'Quarter' },
+  { value: 2, label: 'Eighths' },
+  { value: 3, label: 'Triplets' },
+  { value: 4, label: '16ths' },
+]
+
+const SOUND_OPTIONS = SOUND_NAMES.map((name) => ({ value: name, label: name }))
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[6.5rem_1fr] items-center gap-3">
+      <span className="text-sm text-zinc-600 dark:text-zinc-400">{label}</span>
+      <div>{children}</div>
+    </div>
+  )
+}
 
 export default function App({ controller }: { controller: MetronomeLike }) {
   const m = useMetronome(controller)
@@ -39,6 +57,7 @@ export default function App({ controller }: { controller: MetronomeLike }) {
             value={m.bpm}
             onChange={(e) => m.setBpm(Number(e.target.value))}
             aria-label="Tempo slider"
+            {...{ [TEMPO_SLIDER_ATTR]: '' }}
             className="w-full accent-blue-500"
           />
           <IntInput label="BPM" value={m.bpm} min={MIN_BPM} max={MAX_BPM} onChange={m.setBpm} />
@@ -55,7 +74,13 @@ export default function App({ controller }: { controller: MetronomeLike }) {
           />
         </div>
 
-        <BeatDots beatsPerBar={m.beatsPerBar} activeBeat={m.activeBeat} />
+        <BeatDots
+          beatsPerBar={m.beatsPerBar}
+          activeBeat={m.activeBeat}
+          activeAudible={m.activeAudible}
+          levelOf={m.levelOf}
+          onCycle={m.cycleAccent}
+        />
 
         <div className="flex justify-center gap-3">
           <button
@@ -82,8 +107,58 @@ export default function App({ controller }: { controller: MetronomeLike }) {
           </p>
         )}
 
+        <div className="space-y-3">
+          <Row label="Subdivision">
+            <Segmented label="Subdivision" options={SUBDIVISION_OPTIONS} value={m.subdivision} onChange={m.setSubdivision} />
+          </Row>
+          <Row label="Swing">
+            <PercentSlider
+              label="Swing"
+              value={m.swing}
+              min={Math.round(MIN_SWING * 100)}
+              max={Math.round(MAX_SWING * 100)}
+              onChange={m.setSwing}
+              disabled={m.subdivision !== 2}
+            />
+          </Row>
+          <Row label="Sound">
+            <Segmented label="Sound" options={SOUND_OPTIONS} value={m.sound} onChange={m.setSound} />
+          </Row>
+          <Row label="Volume">
+            <PercentSlider label="Volume" value={m.volume} min={0} max={100} onChange={m.setVolume} />
+          </Row>
+        </div>
+
+        <fieldset className="space-y-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-700">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">Practice</legend>
+          <div className="flex flex-wrap items-center gap-2">
+            <Switch label="Gap trainer" checked={m.gap.on} onChange={(on) => m.setGap({ on })} />
+            <span className="ml-auto">play</span>
+            <IntInput label="Gap bars played" value={m.gap.play} min={1} max={16} onChange={(play) => m.setGap({ play })} />
+            <span>bars, mute</span>
+            <IntInput label="Gap bars muted" value={m.gap.mute} min={1} max={16} onChange={(mute) => m.setGap({ mute })} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Switch label="Speed trainer" checked={m.speed.on} onChange={(on) => m.setSpeed({ on })} />
+            <span className="ml-auto">+</span>
+            <IntInput label="Speed step" value={m.speed.step} min={1} max={50} onChange={(step) => m.setSpeed({ step })} />
+            <span>BPM every</span>
+            <IntInput label="Speed every bars" value={m.speed.every} min={1} max={32} onChange={(every) => m.setSpeed({ every })} />
+            <span>bars, up to</span>
+            <IntInput
+              label="Speed target BPM"
+              value={m.speed.target}
+              min={MIN_BPM}
+              max={MAX_BPM}
+              onChange={(target) => m.setSpeed({ target })}
+            />
+          </div>
+        </fieldset>
+
         <p className="text-center text-xs text-zinc-500">
           Space start/stop · ↑/↓ ±1 · Shift+↑/↓ ±10 · T tap
+          <br />
+          Click a dot to cycle accent → normal → mute
         </p>
       </section>
     </main>

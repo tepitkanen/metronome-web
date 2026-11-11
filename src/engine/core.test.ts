@@ -10,6 +10,7 @@ function make({ bpm = 60, beatsPerBar = 4, clickLen = 5 } = {}) {
   m.buffers = {
     accent: new Float32Array(clickLen).fill(1),
     normal: new Float32Array(clickLen).fill(0.5),
+    sub: new Float32Array(clickLen).fill(0.25),
   }
   return m
 }
@@ -110,11 +111,13 @@ describe('MetronomeCore.render', () => {
   })
 
   it('mixes overlapping clicks additively, also across blocks', () => {
-    const whole = render(make({ bpm: 300, clickLen: 300 }), 1000).out // interval 200, click 300
-    expect(whole[0]).toBe(1)
-    expect(whole[200]).toBeCloseTo(1.5) // accent tail + click 1
-    expect(whole[300]).toBeCloseTo(0.5)
-    const m = make({ bpm: 300, clickLen: 300 })
+    // half volume keeps the 1 + 0.5 overlap below the [-1, 1] clip
+    const make2 = () => Object.assign(make({ bpm: 300, clickLen: 300 }), { volume: 0.5 })
+    const whole = render(make2(), 1000).out // interval 200, click 300
+    expect(whole[0]).toBe(0.5)
+    expect(whole[200]).toBeCloseTo(0.75) // accent tail + click 1
+    expect(whole[300]).toBeCloseTo(0.25)
+    const m = make2()
     const split = concat([1, 7, 100, 3, 389, 500].map((n) => render(m, n).out))
     expect(split).toEqual(whole)
   })
@@ -124,7 +127,7 @@ describe('MetronomeCore.render', () => {
     render(m, 450)
     m.reset()
     const { out, beats } = render(m, 10)
-    expect(beats).toEqual([{ beatInBar: 0, time: 0 }])
+    expect(beats).toMatchObject([{ beatInBar: 0, time: 0 }])
     expect([...out.slice(0, 6)]).toEqual([1, 1, 1, 1, 1, 0]) // no leftover tail on top
   })
 

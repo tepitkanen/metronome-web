@@ -203,11 +203,20 @@ describe('MetronomeController start/stop', () => {
   })
 })
 
+const beat = (beatInBar: number, time: number): Beat => ({
+  beatInBar,
+  time,
+  level: 'normal',
+  audible: true,
+  bpm: 120,
+  bumped: false,
+})
+
 describe('MetronomeController settings', () => {
   it('uses defaults 120 / 4 when nothing was set', async () => {
     const c = make()
     await c.start()
-    expect(nodes[0].options.processorOptions).toEqual({ bpm: 120, beatsPerBar: 4 })
+    expect(nodes[0].options.processorOptions).toMatchObject({ bpm: 120, beatsPerBar: 4 })
   })
 
   it('setBpm/setBeatsPerBar before start go into processorOptions', async () => {
@@ -215,7 +224,7 @@ describe('MetronomeController settings', () => {
     c.setBpm(90)
     c.setBeatsPerBar(7)
     await c.start()
-    expect(nodes[0].options.processorOptions).toEqual({ bpm: 90, beatsPerBar: 7 })
+    expect(nodes[0].options.processorOptions).toMatchObject({ bpm: 90, beatsPerBar: 7 })
     expect(nodes[0].port.postMessage).not.toHaveBeenCalled()
   })
 
@@ -274,8 +283,7 @@ describe('MetronomeController beats', () => {
     c.subscribe(b)
     await c.start()
     const beats: Beat[] = [
-      { beatInBar: 0, time: 1 },
-      { beatInBar: 1, time: 1.5 },
+      beat(0, 1), beat(1, 1.5),
     ]
     nodes[0].port.onmessage?.({ data: beats })
     expect(a.mock.calls.map((x) => x[0])).toEqual(beats)
@@ -290,7 +298,7 @@ describe('MetronomeController beats', () => {
     c.subscribe(b)
     await c.start()
     off()
-    nodes[0].port.onmessage?.({ data: [{ beatInBar: 0, time: 1 }] })
+    nodes[0].port.onmessage?.({ data: [beat(0, 1)] })
     expect(a).not.toHaveBeenCalled()
     expect(b).toHaveBeenCalledOnce()
   })
@@ -302,8 +310,8 @@ describe('MetronomeController beats', () => {
     c.subscribe(late)
     nodes[0].port.onmessage?.({ data: [] })
     expect(late).not.toHaveBeenCalled()
-    nodes[0].port.onmessage?.({ data: [{ beatInBar: 2, time: 3 }] })
-    expect(late).toHaveBeenCalledWith({ beatInBar: 2, time: 3 })
+    nodes[0].port.onmessage?.({ data: [beat(2, 3)] })
+    expect(late).toHaveBeenCalledWith(beat(2, 3))
   })
 })
 

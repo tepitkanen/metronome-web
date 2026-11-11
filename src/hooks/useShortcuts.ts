@@ -6,11 +6,18 @@ export interface ShortcutActions {
   tap(): void
 }
 
+/** Other sliders (swing, volume) keep their own arrow keys; the tempo slider is marked with this. */
+export const TEMPO_SLIDER_ATTR = 'data-tempo-slider'
+
 /** True when the key should go to the focused element instead (typing, or a focused button). */
-function belongsToTarget(target: EventTarget | null): boolean {
+function belongsToTarget(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) return true
-  if (target instanceof HTMLInputElement) return target.type !== 'range' // sliders: we handle arrows
+  if (target instanceof HTMLInputElement) {
+    if (target.type !== 'range') return true
+    // Sliders: Space and T are ours; arrows are ours only on the tempo slider.
+    return key.startsWith('Arrow') && !target.hasAttribute(TEMPO_SLIDER_ATTR)
+  }
   // A keyboard-focused button activates itself on Space/Enter; don't toggle as well.
   return target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target instanceof HTMLButtonElement
 }
@@ -24,7 +31,7 @@ export function useShortcuts(actions: ShortcutActions): void {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || belongsToTarget(e.target)) return
+      if (e.ctrlKey || e.metaKey || e.altKey || belongsToTarget(e.target, e.key)) return
       const a = latest.current
       switch (e.key) {
         case ' ':
