@@ -65,10 +65,10 @@ export class MetronomeController implements MetronomeLike {
     this.startToken++ // cancels a start that is still loading
     const node = this.node
     this.node = null
+    void this.ctx?.suspend() // nothing is playing (also after a cancelled start); let the device idle
     if (!node) return
     node.port.onmessage = null
     node.disconnect()
-    void this.ctx?.suspend() // nothing is playing; let the audio device idle
   }
 
   setBpm(bpm: number): void {

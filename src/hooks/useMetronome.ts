@@ -21,6 +21,7 @@ export function useMetronome(controller: MetronomeLike) {
 
   const bpmRef = useRef(bpm) // latest value for callbacks (nudge, tap) without stale closures
   const runningRef = useRef(false)
+  const toggleId = useRef(0) // identifies the latest toggle; older start() results are ignored
   const pending = useRef<Beat[]>([])
   const tapper = useRef<TapTempo | null>(null)
 
@@ -38,6 +39,7 @@ export function useMetronome(controller: MetronomeLike) {
     (value: number) => {
       const v = clampBeats(value)
       setBeatsState(v)
+      setActiveBeat((a) => (a !== null && a >= v ? null : a)) // lit dot no longer exists
       controller.setBeatsPerBar(v)
     },
     [controller],
@@ -52,6 +54,7 @@ export function useMetronome(controller: MetronomeLike) {
   }, [setBpm])
 
   const toggle = useCallback(async () => {
+    const id = ++toggleId.current
     if (runningRef.current) {
       runningRef.current = false
       controller.stop()
@@ -67,6 +70,7 @@ export function useMetronome(controller: MetronomeLike) {
     try {
       await controller.start()
     } catch (err) {
+      if (id !== toggleId.current) return // user already stopped or restarted; not this start's UI
       runningRef.current = false
       setRunning(false)
       setError(`Could not start audio: ${err instanceof Error ? err.message : String(err)}`)
