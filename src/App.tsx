@@ -13,6 +13,9 @@ import { TEMPO_SLIDER_ATTR, useShortcuts } from './hooks/useShortcuts'
 const button =
   'w-28 rounded-lg px-4 py-2 font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
 
+const nudgeButton =
+  'size-11 rounded-full bg-zinc-200 text-2xl hover:bg-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-zinc-700 dark:hover:bg-zinc-600'
+
 const SUBDIVISION_OPTIONS: { value: number; label: string }[] = [
   { value: 1, label: 'Quarter' },
   { value: 2, label: 'Eighths' },
@@ -35,18 +38,47 @@ export default function App({ controller }: { controller: MetronomeLike }) {
   const m = useMetronome(controller)
   useShortcuts(m)
 
+  // Live trainer status, from the beat currently heard (like the desktop app's status line).
+  const status: string[] = []
+  if (m.running && m.activeBeat !== null) {
+    if (m.gap.on) status.push(m.activeAudible ? 'Playing' : 'Silent bar')
+    if (m.speed.on) status.push(`${m.bpm} → ${m.speed.target} BPM`)
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-100 p-4 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100">
       <section className="w-full max-w-md space-y-6 rounded-2xl bg-white p-6 shadow-lg dark:bg-zinc-800/60">
-        <h1 className="text-center text-sm font-semibold uppercase tracking-widest text-zinc-500">
+        <h1 className="text-center text-sm font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Metronome
         </h1>
 
-        <div className="text-center">
-          <span className="text-6xl font-bold tabular-nums" data-testid="bpm-display">
-            {m.bpm}
-          </span>
-          <span className="ml-2 text-zinc-500">BPM</span>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            aria-label="Decrease tempo"
+            onMouseDown={keepFocus}
+            onClick={() => m.nudge(-1)}
+            className={nudgeButton}
+          >
+            −
+          </button>
+          {/* Not a live region: the slider and field already announce the user's own changes,
+              and announcing every step while dragging would flood a screen reader. */}
+          <div className="text-center">
+            <span className="text-6xl font-bold tabular-nums" data-testid="bpm-display">
+              {m.bpm}
+            </span>
+            <span className="ml-2 text-zinc-500 dark:text-zinc-400">BPM</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Increase tempo"
+            onMouseDown={keepFocus}
+            onClick={() => m.nudge(1)}
+            className={nudgeButton}
+          >
+            +
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -63,8 +95,7 @@ export default function App({ controller }: { controller: MetronomeLike }) {
           <IntInput label="BPM" value={m.bpm} min={MIN_BPM} max={MAX_BPM} onChange={m.setBpm} />
         </div>
 
-        <div className="flex items-center justify-between">
-          <span>Beats per bar</span>
+        <Row label="Beats per bar">
           <IntInput
             label="Beats per bar"
             value={m.beatsPerBar}
@@ -72,7 +103,7 @@ export default function App({ controller }: { controller: MetronomeLike }) {
             max={MAX_BEATS}
             onChange={m.setBeatsPerBar}
           />
-        </div>
+        </Row>
 
         <BeatDots
           beatsPerBar={m.beatsPerBar}
@@ -101,6 +132,16 @@ export default function App({ controller }: { controller: MetronomeLike }) {
           </button>
         </div>
 
+        {/* Speed-trainer bumps only: tempo changes the user didn't make themselves. */}
+        <p className="sr-only" aria-live="polite" data-testid="tempo-announcement">
+          {m.announcement}
+        </p>
+
+        {/* Always rendered with a fixed height, so the layout doesn't jump when it fills. */}
+        <p data-testid="trainer-status" className="h-5 text-center text-sm text-zinc-600 dark:text-zinc-400">
+          {status.join(' · ')}
+        </p>
+
         {m.error && (
           <p role="alert" className="text-center text-sm text-red-600 dark:text-red-400">
             {m.error}
@@ -119,7 +160,13 @@ export default function App({ controller }: { controller: MetronomeLike }) {
               max={Math.round(MAX_SWING * 100)}
               onChange={m.setSwing}
               disabled={m.subdivision !== 2}
+              describedBy={m.subdivision !== 2 ? 'swing-hint' : undefined}
             />
+            {m.subdivision !== 2 && (
+              <p id="swing-hint" className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                Eighths only
+              </p>
+            )}
           </Row>
           <Row label="Sound">
             <Segmented label="Sound" options={SOUND_OPTIONS} value={m.sound} onChange={m.setSound} />
@@ -130,35 +177,42 @@ export default function App({ controller }: { controller: MetronomeLike }) {
         </div>
 
         <fieldset className="space-y-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-700">
-          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">Practice</legend>
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Practice
+          </legend>
           <div className="flex flex-wrap items-center gap-2">
             <Switch label="Gap trainer" checked={m.gap.on} onChange={(on) => m.setGap({ on })} />
-            <span className="ml-auto">play</span>
-            <IntInput label="Gap bars played" value={m.gap.play} min={1} max={16} onChange={(play) => m.setGap({ play })} />
-            <span>bars, mute</span>
-            <IntInput label="Gap bars muted" value={m.gap.mute} min={1} max={16} onChange={(mute) => m.setGap({ mute })} />
+            {/* Dimmed while the trainer is off; still editable, to set it up before switching on. */}
+            <div data-off={!m.gap.on} className={`ml-auto flex flex-wrap items-center gap-2 ${m.gap.on ? '' : 'opacity-60'}`}>
+              <span>play</span>
+              <IntInput label="Gap bars played" value={m.gap.play} min={1} max={16} onChange={(play) => m.setGap({ play })} />
+              <span>bars, mute</span>
+              <IntInput label="Gap bars muted" value={m.gap.mute} min={1} max={16} onChange={(mute) => m.setGap({ mute })} />
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Switch label="Speed trainer" checked={m.speed.on} onChange={(on) => m.setSpeed({ on })} />
-            <span className="ml-auto">+</span>
-            <IntInput label="Speed step" value={m.speed.step} min={1} max={50} onChange={(step) => m.setSpeed({ step })} />
-            <span>BPM every</span>
-            <IntInput label="Speed every bars" value={m.speed.every} min={1} max={32} onChange={(every) => m.setSpeed({ every })} />
-            <span>bars, up to</span>
-            <IntInput
-              label="Speed target BPM"
-              value={m.speed.target}
-              min={MIN_BPM}
-              max={MAX_BPM}
-              onChange={(target) => m.setSpeed({ target })}
-            />
+            <div data-off={!m.speed.on} className={`ml-auto flex flex-wrap items-center gap-2 ${m.speed.on ? '' : 'opacity-60'}`}>
+              <span>+</span>
+              <IntInput label="Speed step" value={m.speed.step} min={1} max={50} onChange={(step) => m.setSpeed({ step })} />
+              <span>BPM every</span>
+              <IntInput label="Speed every bars" value={m.speed.every} min={1} max={32} onChange={(every) => m.setSpeed({ every })} />
+              <span>bars, up to</span>
+              <IntInput
+                label="Speed target BPM"
+                value={m.speed.target}
+                min={MIN_BPM}
+                max={MAX_BPM}
+                onChange={(target) => m.setSpeed({ target })}
+              />
+            </div>
           </div>
         </fieldset>
 
-        <p className="text-center text-xs text-zinc-500">
-          Space start/stop · ↑/↓ ±1 · Shift+↑/↓ ±10 · T tap
-          <br />
-          Click a dot to cycle accent → normal → mute
+        <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+          {/* Keyboard hints only where there's likely a keyboard (a hovering pointer). */}
+          <span className="hidden [@media(hover:hover)]:block">Space start/stop · ↑/↓ ±1 · Shift+↑/↓ ±10 · T tap</span>
+          <span className="block">Click a beat to cycle accent → normal → mute</span>
         </p>
       </section>
     </main>

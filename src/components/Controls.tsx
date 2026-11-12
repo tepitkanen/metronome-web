@@ -41,10 +41,12 @@ interface SliderProps {
   max: number
   onChange(value: number): void
   disabled?: boolean
+  /** Id of an element that explains the slider (e.g. why it's disabled). */
+  describedBy?: string
 }
 
 /** Range slider with its value shown as a percentage. */
-export function PercentSlider({ label, value, min, max, onChange, disabled = false }: SliderProps) {
+export function PercentSlider({ label, value, min, max, onChange, disabled = false, describedBy }: SliderProps) {
   return (
     <div className="flex items-center gap-3">
       <input
@@ -55,6 +57,7 @@ export function PercentSlider({ label, value, min, max, onChange, disabled = fal
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={label}
+        aria-describedby={describedBy}
         className="w-full accent-blue-500 disabled:opacity-40"
       />
       <span className={`w-12 text-right text-sm tabular-nums ${disabled ? 'text-zinc-400' : ''}`}>{value}%</span>

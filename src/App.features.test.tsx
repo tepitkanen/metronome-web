@@ -1,9 +1,10 @@
 // Accent grid, subdivision/swing, sound, volume and the practice trainers in the UI.
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import type { MetronomeLike } from './audio/MetronomeController'
+import { HEIGHT } from './components/beatHeights'
 import type { Beat, Settings } from './engine/core'
 
 class FakeController implements MetronomeLike {
@@ -103,10 +104,34 @@ describe('accent grid', () => {
     act(() => fake.emit({ beatInBar: 0, time: 1, audible: false }))
     await tick()
     expect(dots()[0].dataset.lit).toBe('true')
-    expect(dots()[0].className).toMatch(/bg-indigo-200/)
+    const bar = (i: number) => within(dots()[i]).getByTestId('beat-bar')
+    expect(bar(0).className).toMatch(/bg-indigo-200/)
     act(() => fake.emit({ beatInBar: 1, time: 2 }))
     await tick()
-    expect(dots()[1].className).toMatch(/bg-blue-500/)
+    expect(bar(1).className).toMatch(/bg-blue-500/)
+  })
+
+  it('bar height shows the level, so it is not colour-only', async () => {
+    const user = setup()
+    const bar = (i: number) => within(dots()[i]).getByTestId('beat-bar')
+    expect(bar(0)).toHaveClass(HEIGHT.accent)
+    expect(bar(1)).toHaveClass(HEIGHT.normal)
+    await user.click(dots()[1]) // normal → mute
+    expect(bar(1)).toHaveClass(HEIGHT.mute)
+    expect(new Set(Object.values(HEIGHT)).size).toBe(3) // three distinct heights
+  })
+})
+
+describe('tempo buttons', () => {
+  it('− and + nudge the tempo by 1 without taking focus', async () => {
+    const user = setup()
+    await user.click(btn('Increase tempo'))
+    expect(bpmShown()).toBe('121')
+    await user.click(btn('Decrease tempo'))
+    await user.click(btn('Decrease tempo'))
+    expect(bpmShown()).toBe('119')
+    expect(fake.setBpm).toHaveBeenLastCalledWith(119)
+    expect(document.activeElement).toBe(document.body)
   })
 })
 
@@ -132,6 +157,13 @@ describe('subdivision, swing, sound, volume', () => {
     await user.click(btn('Triplets'))
     expect(fake.last('subdivision')).toBe(3)
     expect(slider('Swing')).toBeDisabled()
+  })
+
+  it('explains why swing is disabled', async () => {
+    const user = setup()
+    expect(screen.getByText('Eighths only')).toBeInTheDocument()
+    await user.click(btn('Eighths'))
+    expect(screen.queryByText('Eighths only')).not.toBeInTheDocument()
   })
 
   it('swing and volume sliders send fractions and show percentages', () => {
@@ -185,6 +217,24 @@ describe('practice trainers', () => {
     await user.type(field('Speed step'), '99{Enter}')
     expect(field('Speed step')).toHaveValue('50')
     expect(fake.last('speed')).toMatchObject({ step: 50 })
+  })
+
+  it('the status line shows trainer progress only while running', async () => {
+    const user = setup()
+    const status = () => screen.getByTestId('trainer-status').textContent
+    await user.click(screen.getByRole('switch', { name: 'Gap trainer' }))
+    await user.click(screen.getByRole('switch', { name: 'Speed trainer' }))
+    expect(status()).toBe('')
+    await user.click(btn('Start'))
+    fake.time = 10
+    act(() => fake.emit({ beatInBar: 0, time: 1 }))
+    await tick()
+    expect(status()).toBe('Playing · 120 → 160 BPM')
+    act(() => fake.emit({ beatInBar: 0, time: 2, audible: false, bpm: 125, bumped: true }))
+    await tick()
+    expect(status()).toBe('Silent bar · 125 → 160 BPM')
+    await user.click(btn('Stop'))
+    expect(status()).toBe('')
   })
 })
 

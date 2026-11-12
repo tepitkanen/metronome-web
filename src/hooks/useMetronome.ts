@@ -41,6 +41,8 @@ export function useMetronome(controller: MetronomeLike) {
   const [running, setRunning] = useState(false)
   const [active, setActive] = useState<Beat | null>(null) // beat currently heard
   const [error, setError] = useState<string | null>(null)
+  // Screen-reader text for tempo changes the user didn't make (speed-trainer bumps).
+  const [announcement, setAnnouncement] = useState('')
 
   const bpmRef = useRef(bpm) // latest value for callbacks (nudge, tap) without stale closures
   const baseBpm = useRef(bpm) // last tempo the user set; Stop returns to it after a speed-trainer ramp
@@ -119,6 +121,7 @@ export function useMetronome(controller: MetronomeLike) {
       pending.current = []
       setRunning(false)
       setActive(null)
+      setAnnouncement('')
       if (bpmRef.current !== baseBpm.current) setBpm(baseBpm.current) // undo the speed trainer's ramp
       return
     }
@@ -165,6 +168,7 @@ export function useMetronome(controller: MetronomeLike) {
           if (bumped) {
             bpmRef.current = last.bpm
             setBpmState(last.bpm)
+            setAnnouncement(`Tempo ${last.bpm} BPM`)
           }
         }
       }
@@ -195,6 +199,7 @@ export function useMetronome(controller: MetronomeLike) {
     activeBeat: active?.beatInBar ?? null,
     activeAudible: active?.audible ?? true,
     error,
+    announcement,
     levelOf,
     setBpm,
     setBeatsPerBar,
